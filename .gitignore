@@ -27,7 +27,11 @@ coverage/
 !.env.example
 
 # ===== 本地文件存储 =====
-uploads/
+# 用 backend/uploads/*（显式路径）而不是 uploads/：
+#   1. uploads/ 会排除整个目录，git 便不进入，下面的 !.gitkeep 失效
+#   2. uploads/* 匹配不到 backend/uploads/（含斜杠的模式锚定在仓库根）
+backend/uploads/*
+!backend/uploads/.gitkeep
 
 # ===== Prisma 生成代码（通过 npm run prisma:generate 重新生成） =====
 backend/src/generated/
