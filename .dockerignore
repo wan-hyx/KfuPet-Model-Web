@@ -1,0 +1,9 @@
+.git
+.github
+.screenshots
+.env
+.env.*
+**/node_modules
+**/dist
+backend/uploads
+backend/.env

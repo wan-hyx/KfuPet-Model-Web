@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220" width="320" height="220">
+  <defs>
+    <linearGradient id="neo-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17203A"/>
+      <stop offset="1" stop-color="#0A0F1E"/>
+    </linearGradient>
+    <linearGradient id="neo-metal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3D4762"/>
+      <stop offset="1" stop-color="#242B3E"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="220" fill="url(#neo-bg)"/>
+  <g stroke="#2A4A5C" stroke-width="1" opacity=".5">
+    <path d="M0 40h320M0 80h320M0 120h320M0 160h320M0 200h320"/>
+    <path d="M40 0v220M80 0v220M120 0v220M160 0v220M200 0v220M240 0v220M280 0v220"/>
+  </g>
+  <ellipse cx="160" cy="116" rx="120" ry="84" fill="none" stroke="#35E8D8" stroke-width="2" opacity=".22"/>
+  <ellipse cx="160" cy="116" rx="96" ry="64" fill="#1CE2D2" opacity=".08"/>
+  <path d="M96 214c8-26 30-40 64-40s56 14 64 40z" fill="#242C42"/>
+  <rect x="100" y="68" width="120" height="104" rx="22" fill="url(#neo-metal)" stroke="#5A6A8E" stroke-width="2"/>
+  <path d="M108 78 96 32l40 22z" fill="#2C3550" stroke="#55658A" stroke-width="2"/>
+  <path d="M212 78l12-46-40 22z" fill="#2C3550" stroke="#55658A" stroke-width="2"/>
+  <path d="M110 70 102 44l24 13z" fill="#41E5D3" opacity=".55"/>
+  <path d="M210 70l8-26-24 13z" fill="#41E5D3" opacity=".55"/>
+  <path d="M160 68V46" stroke="#5A6A8E" stroke-width="4"/>
+  <circle cx="160" cy="44" r="10" fill="#25E7D4" opacity=".22"/>
+  <circle cx="160" cy="44" r="5" fill="#6BFFEF"/>
+  <rect x="114" y="94" width="92" height="56" rx="14" fill="#0B1120" stroke="#19A99E" stroke-width="1.5"/>
+  <rect x="128" y="108" width="22" height="12" rx="5" fill="#5CF7E5"/>
+  <rect x="170" y="108" width="22" height="12" rx="5" fill="#5CF7E5"/>
+  <rect x="152" y="132" width="16" height="4" rx="2" fill="#35C8BA"/>
+  <circle cx="110" cy="84" r="3" fill="#8C9CB8"/>
+  <circle cx="210" cy="84" r="3" fill="#8C9CB8"/>
+  <circle cx="110" cy="156" r="3" fill="#8C9CB8"/>
+  <circle cx="210" cy="156" r="3" fill="#8C9CB8"/>
+  <path d="M84 132h-18v20h26M236 132h18v20h-26" fill="none" stroke="#35E8D8" stroke-width="1.5" opacity=".5"/>
+  <path d="M54 96l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" fill="#5CF7E5" opacity=".8"/>
+  <path d="M268 170l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" fill="#5CF7E5" opacity=".7"/>
+</svg>
