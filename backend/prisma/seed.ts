@@ -277,9 +277,23 @@ const noticeSeeds = [
   },
 ]
 
+function readSeedPassword(name: string) {
+  const value = process.env[name]?.trim()
+
+  if (!value) {
+    throw new Error(`缺少 ${name}：请在根目录 .env 中显式设置后再运行种子脚本`)
+  }
+
+  if (value.length < 8) {
+    throw new Error(`${name} 至少需要 8 位字符`)
+  }
+
+  return value
+}
+
 async function main() {
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'admin1234'
-  const demoPassword = process.env.SEED_USER_PASSWORD ?? 'demo1234'
+  const adminPassword = readSeedPassword('SEED_ADMIN_PASSWORD')
+  const demoPassword = readSeedPassword('SEED_USER_PASSWORD')
 
   const [adminHash, demoHash] = await Promise.all([
     hash(adminPassword, 10),

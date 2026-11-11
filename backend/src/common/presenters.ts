@@ -19,6 +19,7 @@ export interface PostLike {
   createdAt: Date
   isPinned?: boolean
   isFeatured?: boolean
+  isHidden?: boolean
   author: UserLike
   category: { id: string; name: string; slug: string }
   tags: Array<{ tag: { name: string } }>
@@ -76,6 +77,7 @@ export function presentPost(post: PostLike) {
     comments: post.commentCount,
     pinned: post.isPinned ?? false,
     featured: post.isFeatured ?? false,
+    hidden: post.isHidden ?? false,
     publishedAt: post.createdAt,
     author: presentUser(post.author),
     category: {

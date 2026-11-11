@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { ModelStatus } from '@prisma/client'
+import { ModelStatus, Prisma, Role } from '@prisma/client'
 import { extname } from 'node:path'
 import { mediaUrl, presentUser } from '../common/presenters'
+import type { AuthUser } from '../common/types'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
+import { ListAdminUsersQueryDto } from './dto/list-admin-users-query.dto'
+import { UpdateAdminUserDto } from './dto/update-admin-user.dto'
 import { UpdateProfileDto } from './dto/update-profile.dto'
 
 const AVATAR_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])
@@ -122,5 +125,100 @@ export class UsersService {
     })
 
     return this.me(id)
+  }
+
+  async listAdminUsers(query: ListAdminUsersQueryDto) {
+    const where: Prisma.UserWhereInput = {}
+    const keyword = query.q?.trim()
+
+    if (keyword) {
+      where.OR = [
+        { username: { contains: keyword, mode: 'insensitive' } },
+        { displayName: { contains: keyword, mode: 'insensitive' } },
+        { email: { contains: keyword, mode: 'insensitive' } },
+      ]
+    }
+
+    if (query.role) where.role = query.role
+    if (query.status === 'banned') where.isBanned = true
+    if (query.status === 'active') where.isBanned = false
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        select: adminUserSelect,
+      }),
+      this.prisma.user.count({ where }),
+    ])
+
+    return {
+      items: items.map(presentAdminUser),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    }
+  }
+
+  async updateAdminUser(id: string, dto: UpdateAdminUserDto, actor: AuthUser) {
+    if (id === actor.id) {
+      throw new BadRequestException('不能修改自己的角色或禁用状态')
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true },
+    })
+    if (!user) throw new NotFoundException('用户不存在')
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: {
+        role: dto.role,
+        isBanned: dto.isBanned,
+      },
+      select: adminUserSelect,
+    })
+
+    return presentAdminUser(updated)
+  }
+}
+
+const adminUserSelect = {
+  id: true,
+  username: true,
+  email: true,
+  displayName: true,
+  avatarUrl: true,
+  bio: true,
+  role: true,
+  isBanned: true,
+  createdAt: true,
+  _count: { select: { posts: true, comments: true, models: true } },
+} as const
+
+function presentAdminUser(user: {
+  id: string
+  username: string
+  email: string | null
+  displayName: string | null
+  avatarUrl: string | null
+  bio: string | null
+  role: Role
+  isBanned: boolean
+  createdAt: Date
+  _count: { posts: number; comments: number; models: number }
+}) {
+  return {
+    ...presentUser(user),
+    email: user.email,
+    isBanned: user.isBanned,
+    stats: {
+      posts: user._count.posts,
+      comments: user._count.comments,
+      models: user._count.models,
+    },
   }
 }

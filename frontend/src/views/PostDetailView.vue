@@ -4,6 +4,7 @@ import { NSpin, useMessage } from 'naive-ui'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
+import ReportButton from '@/components/report/ReportButton.vue'
 import {
   deleteComment,
   deletePost,
@@ -200,6 +201,13 @@ function canDeleteComment(comment: ApiComment) {
               {{ post.likes }}
               <em>不能给自己点赞</em>
             </span>
+
+            <ReportButton
+              v-if="!isOwnPost"
+              target-type="POST"
+              :target-id="post.id"
+              :target-title="post.title"
+            />
 
             <button
               v-if="canDeletePost"

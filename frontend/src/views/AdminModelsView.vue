@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { NSpin, useMessage } from 'naive-ui'
+import AdminTabs from '@/components/admin/AdminTabs.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import {
@@ -115,6 +116,8 @@ function republish(model: ApiModel) {
         <span>/</span>
         <span>模型审核</span>
       </div>
+
+      <AdminTabs />
 
       <div class="page-head">
         <div>

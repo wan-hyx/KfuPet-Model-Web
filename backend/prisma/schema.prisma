@@ -34,6 +34,18 @@ enum FavoriteType {
   MODEL
 }
 
+enum ReportTargetType {
+  POST
+  MODEL
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  RESOLVED
+  REJECTED
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique
@@ -43,6 +55,7 @@ model User {
   avatarUrl    String?
   bio          String?
   role         Role     @default(USER)
+  isBanned     Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -52,6 +65,7 @@ model User {
   favorites Favorite[]
   downloads DownloadRecord[]
   postLikes PostLike[]
+  reports   Report[]
 }
 
 model PostCategory {
@@ -240,4 +254,22 @@ model PostLike {
 
   @@id([postId, userId])
   @@index([userId])
+}
+
+model Report {
+  id         String           @id @default(cuid())
+  reporterId String
+  targetType ReportTargetType
+  targetId   String
+  reason     String
+  detail     String           @db.Text
+  status     ReportStatus     @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reporterId])
 }

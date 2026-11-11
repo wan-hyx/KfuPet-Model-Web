@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { NModal, useMessage } from 'naive-ui'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
@@ -114,7 +113,7 @@ const docs: Record<'posting' | 'review', GuideDoc> = {
           '轻微违规：提醒修改或由管理员调整分类与标签。',
           '一般违规：删除内容并记录，重复违规将限制发帖。',
           '严重违规：禁言、封禁账号，涉嫌违法的将保留证据并配合处理。',
-          '发现违规内容可通过帖子详情页的管理员入口或社区反馈渠道举报，请附帖子链接与原因。',
+          '发现违规内容可直接在帖子详情页或模型详情页点击「举报」，选择违规类型并补充说明，管理员会在后台处理。',
           '对处理结果有异议可联系管理员说明情况，我们会复核并给出结论。',
         ],
       },
@@ -251,77 +250,6 @@ const docKey = computed<'posting' | 'review'>(() =>
   route.meta.doc === 'review' ? 'review' : 'posting',
 )
 const doc = computed(() => docs[docKey.value])
-
-const REPORT_EMAIL = 'l2179725762@gmail.com'
-const reportTypes = ['广告引流', '人身攻击', '侵权盗版', '色情或暴力', '违法内容', '其他']
-
-const message = useMessage()
-const showReport = ref(false)
-const reportError = ref('')
-
-const reportForm = reactive({
-  url: '',
-  type: reportTypes[0],
-  detail: '',
-  contact: '',
-})
-
-function openReport() {
-  reportError.value = ''
-  showReport.value = true
-}
-
-function buildReportText() {
-  return [
-    '【KfuPet Hub 违规举报】',
-    `违规链接：${reportForm.url.trim() || '（未填写）'}`,
-    `违规类型：${reportForm.type}`,
-    `补充说明：${reportForm.detail.trim() || '（未填写）'}`,
-    `联系方式：${reportForm.contact.trim() || '（未填写）'}`,
-    `提交时间：${new Date().toLocaleString('zh-CN')}`,
-  ].join('\n')
-}
-
-function validateReport() {
-  if (!reportForm.url.trim()) return '请填写违规内容的链接'
-  if (reportForm.detail.trim().length < 10) return '请补充至少 10 个字的违规说明'
-  return ''
-}
-
-function sendReport() {
-  reportError.value = validateReport()
-  if (reportError.value) return
-
-  const subject = `【KfuPet Hub 违规举报】${reportForm.type}`
-  window.location.href = `mailto:${REPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildReportText())}`
-  message.success('已打开邮件客户端，请确认发送举报邮件')
-  showReport.value = false
-}
-
-async function copyReport() {
-  reportError.value = validateReport()
-  if (reportError.value) return
-
-  const text = buildReportText()
-
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-    } else {
-      const textarea = document.createElement('textarea')
-      textarea.value = text
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-    }
-    message.success('举报内容已复制，可发送至 ' + REPORT_EMAIL)
-  } catch {
-    message.error('复制失败，请手动选择举报内容')
-  }
-}
 </script>
 
 <template>
@@ -341,17 +269,7 @@ async function copyReport() {
           <h1>{{ doc.title }}</h1>
           <p>{{ doc.intro }}</p>
         </div>
-        <div class="head-actions">
-          <span class="updated">最后更新：{{ doc.updatedAt }}</span>
-          <button
-            v-if="docKey === 'posting'"
-            type="button"
-            class="btn btn-outline report-btn"
-            @click="openReport"
-          >
-            举报违规
-          </button>
-        </div>
+        <span class="updated">最后更新：{{ doc.updatedAt }}</span>
       </div>
 
       <div class="guide-layout">
@@ -405,69 +323,6 @@ async function copyReport() {
         </article>
       </div>
     </div>
-
-    <NModal
-      v-model:show="showReport"
-      preset="card"
-      title="举报违规内容"
-      :style="{ width: '540px', maxWidth: '92vw' }"
-      :bordered="false"
-    >
-      <p class="report-intro">
-        请提供具体链接与违规说明，我们会在 1-2 个工作日内核查处理。举报信息仅用于本次处理。
-      </p>
-
-      <div class="report-form">
-        <div class="form-field">
-          <label for="report-url">违规内容链接</label>
-          <input
-            id="report-url"
-            v-model="reportForm.url"
-            class="form-control"
-            type="text"
-            placeholder="帖子或模型包页面地址"
-          />
-        </div>
-
-        <div class="form-field">
-          <label for="report-type">违规类型</label>
-          <select id="report-type" v-model="reportForm.type" class="form-control">
-            <option v-for="type in reportTypes" :key="type" :value="type">{{ type }}</option>
-          </select>
-        </div>
-
-        <div class="form-field">
-          <label for="report-detail">补充说明</label>
-          <textarea
-            id="report-detail"
-            v-model="reportForm.detail"
-            class="form-control report-detail"
-            maxlength="500"
-            placeholder="请描述违规情况，至少 10 个字"
-          />
-        </div>
-
-        <div class="form-field">
-          <label for="report-contact">联系方式 <span class="optional">（可选）</span></label>
-          <input
-            id="report-contact"
-            v-model="reportForm.contact"
-            class="form-control"
-            type="text"
-            placeholder="邮箱或 QQ，便于反馈处理结果"
-          />
-        </div>
-
-        <p v-if="reportError" class="form-error">{{ reportError }}</p>
-      </div>
-
-      <template #footer>
-        <div class="report-actions">
-          <button type="button" class="btn btn-outline" @click="copyReport">复制举报信息</button>
-          <button type="button" class="btn btn-primary" @click="sendReport">发送举报邮件</button>
-        </div>
-      </template>
-    </NModal>
   </div>
 </template>
 
@@ -484,42 +339,6 @@ async function copyReport() {
   font-size: 12px;
   color: #9a918f;
   white-space: nowrap;
-}
-
-.head-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-.report-btn {
-  padding: 8px 18px;
-  font-size: 13px;
-}
-
-.report-intro {
-  margin-bottom: 18px;
-  font-size: 13px;
-  line-height: 1.75;
-  color: var(--muted);
-}
-
-.report-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.report-detail {
-  min-height: 96px;
-}
-
-.report-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
 .guide-layout {

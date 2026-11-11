@@ -4,6 +4,7 @@ import { NSpin, useMessage } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
+import ReportButton from '@/components/report/ReportButton.vue'
 import {
   createModelVersion,
   downloadUrl,
@@ -45,6 +46,9 @@ const canManage = computed(
     isLoggedIn.value &&
     model.value !== null &&
     (model.value.author.id === session.user?.id || isAdmin.value),
+)
+const isOwnModel = computed(
+  () => isLoggedIn.value && model.value !== null && model.value.author.id === session.user?.id,
 )
 
 onMounted(load)
@@ -208,6 +212,13 @@ async function submitVersion() {
               >
                 {{ showUpload ? '收起上传' : '上传新版本' }}
               </button>
+              <ReportButton
+                v-if="!isOwnModel"
+                target-type="MODEL"
+                :target-id="model.id"
+                :target-title="model.name"
+                variant="outline"
+              />
             </div>
           </div>
         </section>

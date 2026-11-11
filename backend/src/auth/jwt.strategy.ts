@@ -26,11 +26,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         username: true,
         displayName: true,
         avatarUrl: true,
+        isBanned: true,
         role: true,
       },
     })
 
     if (!user) throw new UnauthorizedException('登录状态已失效')
+    if (user.isBanned) throw new UnauthorizedException('账号已被禁用，请联系管理员')
 
     return user
   }

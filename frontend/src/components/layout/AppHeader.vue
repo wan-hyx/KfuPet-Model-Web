@@ -130,7 +130,7 @@ async function onLogout() {
                 to="/admin/models"
                 @click="showUserMenu = false"
               >
-                模型审核
+                管理后台
               </RouterLink>
               <button type="button" class="menu-item logout" @click="onLogout">退出登录</button>
             </div>

@@ -11,8 +11,10 @@ import { presentPost, presentPostDetail, presentUser } from '../common/presenter
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateCommentDto } from './dto/create-comment.dto'
 import { CreatePostDto } from './dto/create-post.dto'
+import { ListAdminPostsQueryDto } from './dto/list-admin-posts-query.dto'
 import { ListPostsQueryDto } from './dto/list-posts-query.dto'
 import { UpdatePostDto } from './dto/update-post.dto'
+import { UpdatePostFlagsDto } from './dto/update-post-flags.dto'
 
 const postInclude = {
   author: {
@@ -84,6 +86,61 @@ export class CommunityService {
       page: query.page,
       pageSize: query.pageSize,
     }
+  }
+
+  async listAdminPosts(query: ListAdminPostsQueryDto) {
+    const where: Prisma.PostWhereInput = {}
+    const keyword = query.q?.trim()
+
+    if (keyword) {
+      where.OR = [
+        { title: { contains: keyword, mode: 'insensitive' } },
+        { content: { contains: keyword, mode: 'insensitive' } },
+      ]
+    }
+
+    if (query.filter === 'hidden') where.isHidden = true
+    if (query.filter === 'pinned') where.isPinned = true
+    if (query.filter === 'featured') where.isFeatured = true
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.post.findMany({
+        where,
+        include: postInclude,
+        orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.prisma.post.count({ where }),
+    ])
+
+    return {
+      items: items.map(presentPost),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    }
+  }
+
+  async updatePostFlags(id: string, dto: UpdatePostFlagsDto) {
+    const post = await this.prisma.post.findUnique({
+      where: { id },
+      select: { id: true },
+    })
+
+    if (!post) throw new NotFoundException('帖子不存在')
+
+    const updated = await this.prisma.post.update({
+      where: { id },
+      data: {
+        isHidden: dto.isHidden,
+        isPinned: dto.isPinned,
+        isFeatured: dto.isFeatured,
+      },
+      include: postInclude,
+    })
+
+    return presentPostDetail(updated)
   }
 
   async getPost(id: string, viewer?: AuthUser | null) {

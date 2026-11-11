@@ -5,6 +5,7 @@ export interface AuthUser {
   username: string
   displayName: string | null
   avatarUrl: string | null
+  isBanned?: boolean
   role: Role
 }
 

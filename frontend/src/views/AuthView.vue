@@ -8,7 +8,6 @@ const route = useRoute()
 const router = useRouter()
 
 const isRegister = computed(() => route.path === '/register')
-const showDemo = import.meta.env.DEV
 const loading = ref(false)
 const error = ref('')
 
@@ -74,12 +73,6 @@ async function submit() {
   } finally {
     loading.value = false
   }
-}
-
-async function useDemoAccount(username: string, password: string) {
-  form.username = username
-  form.password = password
-  await submit()
 }
 </script>
 
@@ -179,18 +172,6 @@ async function useDemoAccount(username: string, password: string) {
             {{ loading ? '处理中…' : isRegister ? '注册并登录' : '登录' }}
           </button>
         </form>
-
-        <div v-if="showDemo && !isRegister" class="auth-demo">
-          <p>演示账号（仅开发环境）</p>
-          <div class="demo-row">
-            <button type="button" class="demo-btn" :disabled="loading" @click="useDemoAccount('luye', 'demo1234')">
-              用户 luye
-            </button>
-            <button type="button" class="demo-btn" :disabled="loading" @click="useDemoAccount('admin', 'admin1234')">
-              管理员 admin
-            </button>
-          </div>
-        </div>
 
         <p class="auth-switch">
           {{ isRegister ? '已经有账号了？' : '还没有账号？' }}
@@ -325,45 +306,6 @@ async function useDemoAccount(username: string, password: string) {
   opacity: 0.65;
   cursor: not-allowed;
   transform: none;
-}
-
-.auth-demo {
-  margin-top: 20px;
-  padding: 13px 15px;
-  border-radius: 13px;
-  background: #fffdf9;
-  border: 1px dashed var(--line);
-}
-
-.auth-demo p {
-  font-size: 11.5px;
-  font-weight: 650;
-  color: #9a918f;
-}
-
-.demo-row {
-  display: flex;
-  gap: 8px;
-  margin-top: 9px;
-  flex-wrap: wrap;
-}
-
-.demo-btn {
-  padding: 6px 11px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-soft);
-  transition:
-    border-color 0.2s,
-    color 0.2s;
-}
-
-.demo-btn:hover {
-  border-color: #f0b8a6;
-  color: var(--accent-deep);
 }
 
 .auth-switch {

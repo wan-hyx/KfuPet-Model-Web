@@ -87,6 +87,24 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '模型审核 · KfuPet Hub', requiresAuth: true, requiresAdmin: true },
   },
   {
+    path: '/admin/posts',
+    name: 'admin-posts',
+    component: () => import('@/views/AdminPostsView.vue'),
+    meta: { title: '社区管理 · KfuPet Hub', requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/users',
+    name: 'admin-users',
+    component: () => import('@/views/AdminUsersView.vue'),
+    meta: { title: '用户管理 · KfuPet Hub', requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/reports',
+    name: 'admin-reports',
+    component: () => import('@/views/AdminReportsView.vue'),
+    meta: { title: '举报处理 · KfuPet Hub', requiresAuth: true, requiresAdmin: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/views/NotFoundView.vue'),

@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common'
@@ -52,6 +53,8 @@ export class AuthService {
     })
 
     if (!user) throw new UnauthorizedException('用户名或密码错误')
+
+    if (user.isBanned) throw new ForbiddenException('账号已被禁用，请联系管理员')
 
     const passwordMatched = await compare(dto.password, user.passwordHash)
     if (!passwordMatched) throw new UnauthorizedException('用户名或密码错误')

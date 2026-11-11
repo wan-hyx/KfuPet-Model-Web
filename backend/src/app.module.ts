@@ -6,6 +6,7 @@ import { HealthController } from './health/health.controller'
 import { HomeModule } from './home/home.module'
 import { ModelsModule } from './models/models.module'
 import { PrismaModule } from './prisma/prisma.module'
+import { ReportsModule } from './reports/reports.module'
 import { StorageModule } from './storage/storage.module'
 import { UsersModule } from './users/users.module'
 
@@ -21,6 +22,7 @@ import { UsersModule } from './users/users.module'
     UsersModule,
     CommunityModule,
     ModelsModule,
+    ReportsModule,
     HomeModule,
   ],
   controllers: [HealthController],
