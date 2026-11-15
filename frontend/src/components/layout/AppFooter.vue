@@ -30,7 +30,7 @@ function onContact() {
           <RouterLink to="/">首页</RouterLink>
           <RouterLink to="/community">社区</RouterLink>
           <RouterLink to="/models">模型包</RouterLink>
-          <RouterLink to="/#download">客户端下载</RouterLink>
+          <RouterLink to="/download">客户端下载</RouterLink>
         </div>
 
         <div class="footer-col">

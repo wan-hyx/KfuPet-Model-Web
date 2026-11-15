@@ -33,4 +33,11 @@ export class UpdatePostDto {
   @IsString({ each: true })
   @Length(1, 24, { each: true })
   tags?: string[]
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(3)
+  @IsString({ each: true })
+  @Length(1, 64, { each: true })
+  relatedModelIds?: string[]
 }

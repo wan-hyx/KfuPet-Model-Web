@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { NSpin, useMessage } from 'naive-ui'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import ReportButton from '@/components/report/ReportButton.vue'
+import { getFavoriteStatus, toggleFavorite as toggleFavoriteApi } from '@/api/favorites'
 import {
   createModelVersion,
   downloadUrl,
@@ -21,6 +22,7 @@ import {
 } from '@/utils/format'
 
 const route = useRoute()
+const router = useRouter()
 const message = useMessage()
 
 const model = ref<ApiModel | null>(null)
@@ -32,6 +34,8 @@ const showUpload = ref(false)
 const uploading = ref(false)
 const uploadError = ref('')
 const versionFile = ref<File | null>(null)
+const favorited = ref(false)
+const favoriting = ref(false)
 
 const versionForm = reactive({
   version: '',
@@ -58,16 +62,43 @@ async function load() {
   error.value = ''
 
   try {
-    const [modelData, versionData] = await Promise.all([
+    const [modelData, versionData, favoriteData] = await Promise.all([
       getModel(modelId.value),
       listModelVersions(modelId.value),
+      isLoggedIn.value
+        ? getFavoriteStatus('MODEL', modelId.value).catch(() => ({ favorited: false }))
+        : Promise.resolve({ favorited: false }),
     ])
     model.value = modelData
     versions.value = versionData
+    favorited.value = favoriteData.favorited
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '模型包加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function toggleFavorite() {
+  if (!model.value) return
+
+  if (!isLoggedIn.value) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+
+  if (favoriting.value) return
+  favoriting.value = true
+
+  try {
+    const result = await toggleFavoriteApi('MODEL', model.value.id)
+    favorited.value = result.favorited
+    model.value.favorites = result.favorites
+    message.success(result.favorited ? '已收藏模型包' : '已取消收藏')
+  } catch (reason) {
+    message.error(reason instanceof Error ? reason.message : '操作失败，请稍后重试')
+  } finally {
+    favoriting.value = false
   }
 }
 
@@ -170,7 +201,9 @@ async function submitVersion() {
                 :seed="model.author.id"
               />
               <span>
-                <strong>{{ model.author.name }}</strong>
+                <RouterLink :to="`/users/${model.author.id}`" class="author-link">
+                  {{ model.author.name }}
+                </RouterLink>
                 <em>发布于 {{ formatDate(model.publishedAt) }}</em>
               </span>
             </div>
@@ -192,6 +225,10 @@ async function submitVersion() {
                 <dt>文件大小</dt>
                 <dd>{{ formatSize(latestVersion?.sizeBytes ?? model.sizeBytes) }}</dd>
               </div>
+              <div>
+                <dt>收藏</dt>
+                <dd>{{ formatCount(model.favorites) }}</dd>
+              </div>
             </dl>
 
             <div class="hero-actions">
@@ -204,6 +241,18 @@ async function submitVersion() {
                 <AppIcon name="download" />
                 下载 {{ latestVersion.version }}
               </a>
+              <button
+                type="button"
+                class="favorite-btn"
+                :class="{ active: favorited }"
+                :aria-pressed="favorited"
+                :disabled="favoriting"
+                @click="toggleFavorite"
+              >
+                <AppIcon name="bookmark" />
+                {{ favorited ? '已收藏' : '收藏' }}
+                <span>{{ formatCount(model.favorites) }}</span>
+              </button>
               <button
                 v-if="canManage"
                 type="button"
@@ -226,6 +275,27 @@ async function submitVersion() {
         <section class="panel detail-panel">
           <h2>模型说明</h2>
           <p class="description">{{ model.description }}</p>
+        </section>
+
+        <section v-if="model.relatedPosts?.length" class="panel related-panel">
+          <div class="related-head">
+            <h2>相关讨论</h2>
+            <span>{{ model.relatedPosts.length }} 篇帖子</span>
+          </div>
+          <div class="related-list">
+            <RouterLink
+              v-for="post in model.relatedPosts"
+              :key="post.id"
+              :to="`/community/posts/${post.id}`"
+              class="related-post"
+            >
+              <strong>{{ post.title }}</strong>
+              <span>
+                {{ post.author.name }} · {{ formatDate(post.publishedAt) }} ·
+                {{ post.comments }} 评论
+              </span>
+            </RouterLink>
+          </div>
         </section>
 
         <form v-if="canManage && showUpload" class="panel upload-panel" @submit.prevent="submitVersion">
@@ -336,6 +406,106 @@ async function submitVersion() {
 <style scoped>
 .detail-container {
   max-width: 960px;
+}
+
+.author-link {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.author-link:hover {
+  color: var(--accent-deep);
+}
+
+.favorite-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink-soft);
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background 0.2s;
+}
+
+.favorite-btn:hover {
+  border-color: #f0b4a3;
+  color: var(--accent-deep);
+}
+
+.favorite-btn.active {
+  border-color: #ffd3c6;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.favorite-btn span {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.favorite-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.related-panel {
+  padding: 24px 26px;
+  margin-top: 18px;
+}
+
+.related-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.related-head h2 {
+  font-size: 18px;
+}
+
+.related-head span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.related-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.related-post {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 0;
+  border-top: 1px dashed var(--line);
+}
+
+.related-post:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.related-post strong {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.related-post:hover strong {
+  color: var(--accent-deep);
+}
+
+.related-post span {
+  font-size: 11.5px;
+  color: var(--muted);
 }
 
 .model-hero {

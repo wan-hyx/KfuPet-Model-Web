@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import ReportButton from '@/components/report/ReportButton.vue'
+import { toggleFavorite as toggleFavoriteApi } from '@/api/favorites'
 import {
   deleteComment,
   deletePost,
@@ -29,6 +30,8 @@ const error = ref('')
 const commentText = ref('')
 const submittingComment = ref(false)
 const liking = ref(false)
+const favoriting = ref(false)
+const replyTarget = ref<ApiComment | null>(null)
 
 const postId = computed(() => String(route.params.id))
 const canDeletePost = computed(
@@ -87,6 +90,47 @@ async function toggleLike() {
   }
 }
 
+async function toggleFavorite() {
+  if (!post.value) return
+
+  if (!isLoggedIn.value) {
+    await router.push(loginLink.value)
+    return
+  }
+
+  if (favoriting.value) return
+  favoriting.value = true
+
+  try {
+    const result = await toggleFavoriteApi('POST', post.value.id)
+    post.value.favorited = result.favorited
+    post.value.favorites = result.favorites
+    message.success(result.favorited ? '已收藏帖子' : '已取消收藏')
+  } catch (reason) {
+    message.error(reason instanceof Error ? reason.message : '操作失败，请稍后重试')
+  } finally {
+    favoriting.value = false
+  }
+}
+
+function replyTo(comment: ApiComment) {
+  if (!isLoggedIn.value) {
+    void router.push(loginLink.value)
+    return
+  }
+
+  replyTarget.value = comment
+}
+
+function cancelReply() {
+  replyTarget.value = null
+}
+
+function parentAuthorName(comment: ApiComment) {
+  if (!comment.parentId) return ''
+  return comments.value.find((item) => item.id === comment.parentId)?.author.name ?? ''
+}
+
 async function submitComment() {
   if (!isLoggedIn.value) {
     await router.push(loginLink.value)
@@ -101,9 +145,13 @@ async function submitComment() {
 
   submittingComment.value = true
   try {
-    const comment = await createComment(postId.value, { content })
+    const comment = await createComment(postId.value, {
+      content,
+      parentId: replyTarget.value?.id,
+    })
     comments.value.push(comment)
     commentText.value = ''
+    replyTarget.value = null
     if (post.value) post.value.comments += 1
     message.success('评论已发布')
   } catch (reason) {
@@ -178,7 +226,9 @@ function canDeleteComment(comment: ApiComment) {
                 :avatar-url="post.author.avatarUrl"
                 :seed="post.author.id"
               />
-              <span class="author-name">{{ post.author.name }}</span>
+              <RouterLink :to="`/users/${post.author.id}`" class="author-name">
+                {{ post.author.name }}
+              </RouterLink>
             </span>
             <span class="meta-item"><AppIcon name="clock" />{{ relativeTime(post.publishedAt) }}</span>
             <span class="meta-item"><AppIcon name="eye" />{{ formatCount(post.views) }}</span>
@@ -201,6 +251,19 @@ function canDeleteComment(comment: ApiComment) {
               {{ post.likes }}
               <em>不能给自己点赞</em>
             </span>
+
+            <button
+              type="button"
+              class="like-btn"
+              :class="{ 'is-liked': post.favorited }"
+              :aria-pressed="Boolean(post.favorited)"
+              :disabled="favoriting"
+              :title="post.favorited ? '取消收藏' : '收藏帖子'"
+              @click="toggleFavorite"
+            >
+              <AppIcon name="bookmark" />
+              {{ post.favorites }}
+            </button>
 
             <ReportButton
               v-if="!isOwnPost"
@@ -226,6 +289,34 @@ function canDeleteComment(comment: ApiComment) {
           </div>
         </article>
 
+        <section v-if="post.relatedModels?.length" class="related-models">
+          <div class="related-head">
+            <h2>关联模型包</h2>
+            <span>{{ post.relatedModels.length }} 个</span>
+          </div>
+          <div class="related-grid">
+            <RouterLink
+              v-for="model in post.relatedModels"
+              :key="model.id"
+              :to="`/models/${model.id}`"
+              class="related-card"
+            >
+              <div class="related-cover">
+                <img v-if="model.coverUrl" :src="model.coverUrl" :alt="`${model.name} 封面`" />
+                <div v-else class="cover-fallback"><AppIcon name="paw" /></div>
+              </div>
+              <div class="related-body">
+                <strong>{{ model.name }}</strong>
+                <p>{{ model.summary }}</p>
+                <div class="related-meta">
+                  <span>{{ model.version ?? 'v1.0.0' }}</span>
+                  <span>{{ formatCount(model.downloadCount) }} 下载</span>
+                </div>
+              </div>
+            </RouterLink>
+          </div>
+        </section>
+
         <section class="comments">
           <div class="comments-head">
             <h2>评论 <span>{{ comments.length }}</span></h2>
@@ -243,6 +334,14 @@ function canDeleteComment(comment: ApiComment) {
                   <span class="comment-author">{{ comment.author.name }}</span>
                   <span class="comment-time">{{ relativeTime(comment.createdAt) }}</span>
                   <button
+                    v-if="isLoggedIn && comment.author.id !== session.user?.id"
+                    type="button"
+                    class="reply-link"
+                    @click="replyTo(comment)"
+                  >
+                    回复
+                  </button>
+                  <button
                     v-if="canDeleteComment(comment)"
                     type="button"
                     class="delete-link"
@@ -251,13 +350,22 @@ function canDeleteComment(comment: ApiComment) {
                     删除
                   </button>
                 </div>
-                <p>{{ comment.content }}</p>
+                <p>
+                  <span v-if="parentAuthorName(comment)" class="reply-to">
+                    回复 @{{ parentAuthorName(comment) }}
+                  </span>
+                  {{ comment.content }}
+                </p>
               </div>
             </article>
           </div>
           <p v-else class="empty-state comment-empty">还没有评论，来说点什么吧。</p>
 
           <form v-if="isLoggedIn" class="panel comment-form" @submit.prevent="submitComment">
+            <div v-if="replyTarget" class="reply-banner">
+              <span>正在回复 @{{ replyTarget.author.name }}</span>
+              <button type="button" @click="cancelReply">取消</button>
+            </div>
             <div class="form-field">
               <label for="comment-input">发表评论</label>
               <textarea
@@ -265,7 +373,11 @@ function canDeleteComment(comment: ApiComment) {
                 v-model="commentText"
                 class="form-control"
                 maxlength="2000"
-                placeholder="友善交流，分享你的看法…"
+                :placeholder="
+                  replyTarget
+                    ? `回复 @${replyTarget.author.name}…`
+                    : '友善交流，分享你的看法…'
+                "
               />
             </div>
             <div class="form-actions">
@@ -473,6 +585,143 @@ function canDeleteComment(comment: ApiComment) {
   background: #f6efe6;
   color: #8a7460;
   font-size: 12px;
+}
+
+.related-models {
+  margin-top: 32px;
+}
+
+.related-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.related-head h2 {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.related-head span {
+  font-size: 12px;
+  color: #9a918f;
+}
+
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.related-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+.related-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.related-cover {
+  aspect-ratio: 16 / 10;
+  background: var(--bg-soft);
+}
+
+.related-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted);
+}
+
+.related-body {
+  padding: 13px 15px 15px;
+}
+
+.related-body strong {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.related-body p {
+  margin: 5px 0 9px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.related-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.reply-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent-deep);
+}
+
+.reply-link:hover {
+  text-decoration: underline;
+}
+
+.reply-to {
+  margin-right: 4px;
+  color: var(--accent-deep);
+  font-weight: 650;
+}
+
+.reply-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.reply-banner button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-deep);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.reply-banner button:hover {
+  text-decoration: underline;
 }
 
 .comments {

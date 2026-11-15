@@ -20,10 +20,10 @@ defineProps<{ stats: HeroStat[] }>()
           Windows 客户端可直接从站内获取在线资源，Android 版正在筹备中。
         </p>
         <div class="hero-cta">
-          <a class="btn btn-primary btn-lg" href="#download">
+          <RouterLink class="btn btn-primary btn-lg" to="/download">
             <AppIcon name="download" />
             下载 KfuPet 客户端
-          </a>
+          </RouterLink>
           <a class="btn btn-outline btn-lg" href="#models">
             浏览模型包
             <AppIcon name="arrow" />

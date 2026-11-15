@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length, MaxLength } from 'class-validator'
+import { IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator'
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -15,4 +15,14 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(500)
   avatarUrl?: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  coverUrl?: string
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^(100|[1-9]?\d)% (100|[1-9]?\d)%$/, { message: '背景位置格式不正确' })
+  coverPosition?: string
 }

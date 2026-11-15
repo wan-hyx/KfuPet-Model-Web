@@ -46,6 +46,15 @@ enum ReportStatus {
   REJECTED
 }
 
+enum NotificationType {
+  POST_COMMENT
+  COMMENT_REPLY
+  MODEL_APPROVED
+  MODEL_REJECTED
+  MODEL_DELISTED
+  MODEL_RESTORED
+}
+
 model User {
   id           String   @id @default(cuid())
   username     String   @unique
@@ -53,6 +62,8 @@ model User {
   passwordHash String
   displayName  String?
   avatarUrl    String?
+  coverUrl     String?
+  coverPosition String?
   bio          String?
   role         Role     @default(USER)
   isBanned     Boolean  @default(false)
@@ -62,10 +73,11 @@ model User {
   posts     Post[]
   comments  Comment[]
   models    ModelPackage[]
-  favorites Favorite[]
-  downloads DownloadRecord[]
-  postLikes PostLike[]
-  reports   Report[]
+  favorites     Favorite[]
+  downloads     DownloadRecord[]
+  postLikes     PostLike[]
+  reports       Report[]
+  notifications Notification[]
 }
 
 model PostCategory {
@@ -84,20 +96,22 @@ model Post {
   excerpt      String?  @db.Text
   authorId     String
   categoryId   String
-  views        Int      @default(0)
-  likes        Int      @default(0)
-  commentCount Int      @default(0)
-  isPinned     Boolean  @default(false)
+  views         Int      @default(0)
+  likes         Int      @default(0)
+  favoriteCount Int      @default(0)
+  commentCount  Int      @default(0)
+  isPinned      Boolean  @default(false)
   isFeatured   Boolean  @default(false)
   isHidden     Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  author   User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  category PostCategory  @relation(fields: [categoryId], references: [id])
-  tags     PostTag[]
-  comments Comment[]
-  postLikes PostLike[]
+  author        User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category      PostCategory  @relation(fields: [categoryId], references: [id])
+  tags          PostTag[]
+  comments      Comment[]
+  postLikes     PostLike[]
+  relatedModels PostModel[]
 
   @@index([createdAt])
   @@index([views])
@@ -164,11 +178,12 @@ model ModelPackage {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  author   User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  category ModelCategory  @relation(fields: [categoryId], references: [id])
-  versions ModelVersion[]
-  tags     ModelTag[]
+  author    User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category  ModelCategory   @relation(fields: [categoryId], references: [id])
+  versions  ModelVersion[]
+  tags      ModelTag[]
   downloads DownloadRecord[]
+  postLinks PostModel[]
 
   @@index([status, createdAt])
   @@index([authorId])
@@ -254,6 +269,32 @@ model PostLike {
 
   @@id([postId, userId])
   @@index([userId])
+}
+
+model PostModel {
+  postId  String
+  modelId String
+
+  post  Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  model ModelPackage @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@id([postId, modelId])
+  @@index([modelId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  content   String           @db.Text
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
 }
 
 model Report {

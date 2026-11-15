@@ -53,6 +53,7 @@ interface ApiModel {
 
 interface ApiUpdate {
   id: string
+  modelId: string
   name: string
   version: string
   coverUrl: string | null
@@ -190,6 +191,7 @@ function mapModel(model: ApiModel): ModelPackage {
 function mapUpdate(update: ApiUpdate): ModelUpdate {
   return {
     id: update.id,
+    modelId: update.modelId,
     name: update.name,
     version: update.version,
     cover: update.coverUrl || coverFallback[update.name] || coverSnow,

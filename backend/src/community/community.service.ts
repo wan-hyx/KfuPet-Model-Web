@@ -4,10 +4,11 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common'
-import { Prisma, Role } from '@prisma/client'
+import { Prisma, FavoriteType, ModelStatus, NotificationType, Role } from '@prisma/client'
 import type { AuthUser } from '../common/types'
 import { makeExcerpt, normalizeTags } from '../common/text'
 import { presentPost, presentPostDetail, presentUser } from '../common/presenters'
+import { NotificationsService } from '../notifications/notifications.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateCommentDto } from './dto/create-comment.dto'
 import { CreatePostDto } from './dto/create-post.dto'
@@ -30,11 +31,36 @@ const postInclude = {
   },
   category: true,
   tags: { include: { tag: true } },
+  relatedModels: {
+    include: {
+      model: {
+        include: {
+          author: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+              bio: true,
+              role: true,
+              createdAt: true,
+            },
+          },
+          category: true,
+          tags: { include: { tag: true } },
+          versions: { orderBy: { createdAt: 'desc' as const }, take: 1 },
+        },
+      },
+    },
+  },
 } satisfies Prisma.PostInclude
 
 @Injectable()
 export class CommunityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   listCategories() {
     return this.prisma.postCategory.findMany({
@@ -152,12 +178,26 @@ export class CommunityService {
     if (!post) throw new NotFoundException('帖子不存在')
 
     let liked = false
+    let favorited = false
     if (viewer) {
-      const likedRow = await this.prisma.postLike.findUnique({
-        where: { postId_userId: { postId: id, userId: viewer.id } },
-        select: { postId: true },
-      })
+      const [likedRow, favoriteRow] = await Promise.all([
+        this.prisma.postLike.findUnique({
+          where: { postId_userId: { postId: id, userId: viewer.id } },
+          select: { postId: true },
+        }),
+        this.prisma.favorite.findUnique({
+          where: {
+            userId_type_targetId: {
+              userId: viewer.id,
+              type: FavoriteType.POST,
+              targetId: id,
+            },
+          },
+          select: { id: true },
+        }),
+      ])
       liked = Boolean(likedRow)
+      favorited = Boolean(favoriteRow)
     }
 
     const updated = await this.prisma.post.update({
@@ -166,7 +206,7 @@ export class CommunityService {
       select: { views: true },
     })
 
-    return { ...presentPostDetail({ ...post, views: updated.views }), liked }
+    return { ...presentPostDetail({ ...post, views: updated.views }), liked, favorited }
   }
 
   async toggleLike(postId: string, user: AuthUser) {
@@ -213,6 +253,7 @@ export class CommunityService {
   async createPost(dto: CreatePostDto, user: AuthUser) {
     const category = await this.resolveCategory(dto.categorySlug)
     const tagIds = await this.upsertTags(dto.tags)
+    const relatedModelIds = await this.resolveRelatedModels(dto.relatedModelIds)
     const excerpt = dto.excerpt?.trim() || makeExcerpt(dto.content)
 
     const post = await this.prisma.post.create({
@@ -224,6 +265,11 @@ export class CommunityService {
         categoryId: category.id,
         tags: {
           create: tagIds.map((tagId) => ({ tag: { connect: { id: tagId } } })),
+        },
+        relatedModels: {
+          create: relatedModelIds.map((modelId) => ({
+            model: { connect: { id: modelId } },
+          })),
         },
       },
       include: postInclude,
@@ -243,6 +289,9 @@ export class CommunityService {
 
     const category = dto.categorySlug ? await this.resolveCategory(dto.categorySlug) : null
     const tagIds = dto.tags ? await this.upsertTags(dto.tags) : null
+    const relatedModelIds = dto.relatedModelIds
+      ? await this.resolveRelatedModels(dto.relatedModelIds)
+      : null
 
     const updated = await this.prisma.post.update({
       where: { id },
@@ -256,6 +305,16 @@ export class CommunityService {
               tags: {
                 deleteMany: {},
                 create: tagIds.map((tagId) => ({ tag: { connect: { id: tagId } } })),
+              },
+            }
+          : {}),
+        ...(relatedModelIds
+          ? {
+              relatedModels: {
+                deleteMany: {},
+                create: relatedModelIds.map((modelId) => ({
+                  model: { connect: { id: modelId } },
+                })),
               },
             }
           : {}),
@@ -318,18 +377,20 @@ export class CommunityService {
   async createComment(postId: string, dto: CreateCommentDto, user: AuthUser) {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true },
+      select: { id: true, title: true, authorId: true },
     })
     if (!post) throw new NotFoundException('帖子不存在')
 
+    let parentAuthorId: string | null = null
     if (dto.parentId) {
       const parent = await this.prisma.comment.findUnique({
         where: { id: dto.parentId },
-        select: { id: true, postId: true },
+        select: { id: true, postId: true, authorId: true },
       })
       if (!parent || parent.postId !== postId) {
         throw new BadRequestException('回复的评论不属于当前帖子')
       }
+      parentAuthorId = parent.authorId
     }
 
     const comment = await this.prisma.$transaction(async (tx) => {
@@ -363,6 +424,8 @@ export class CommunityService {
       return created
     })
 
+    await this.notifyComment(post, parentAuthorId, dto.content, user)
+
     return {
       id: comment.id,
       content: comment.content,
@@ -391,6 +454,61 @@ export class CommunityService {
     })
 
     return { success: true }
+  }
+
+  private async resolveRelatedModels(ids?: string[]) {
+    const unique = Array.from(
+      new Set((ids ?? []).map((id) => id.trim()).filter(Boolean)),
+    ).slice(0, 3)
+
+    if (!unique.length) return []
+
+    const models = await this.prisma.modelPackage.findMany({
+      where: { id: { in: unique }, status: ModelStatus.PUBLISHED },
+      select: { id: true },
+    })
+
+    if (models.length !== unique.length) {
+      throw new BadRequestException('关联的模型包不存在或尚未发布')
+    }
+
+    return models.map((model) => model.id)
+  }
+
+  private async notifyComment(
+    post: { id: string; title: string; authorId: string },
+    parentAuthorId: string | null,
+    content: string,
+    user: AuthUser,
+  ) {
+    const actorName = user.displayName ?? user.username
+    const preview = makeExcerpt(content)
+    const link = `/community/posts/${post.id}`
+
+    try {
+      if (parentAuthorId && parentAuthorId !== user.id) {
+        await this.notifications.create({
+          userId: parentAuthorId,
+          type: NotificationType.COMMENT_REPLY,
+          title: '有人回复了你的评论',
+          content: `${actorName} 在《${post.title}》中回复了你：${preview}`,
+          link,
+        })
+        return
+      }
+
+      if (post.authorId !== user.id) {
+        await this.notifications.create({
+          userId: post.authorId,
+          type: NotificationType.POST_COMMENT,
+          title: '有人评论了你的帖子',
+          content: `${actorName} 评论了《${post.title}》：${preview}`,
+          link,
+        })
+      }
+    } catch {
+      // 通知失败不影响评论发布
+    }
   }
 
   private async resolveCategory(slug?: string) {

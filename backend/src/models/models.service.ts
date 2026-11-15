@@ -6,13 +6,14 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { DownloadSource, ModelStatus, Prisma, Role } from '@prisma/client'
+import { DownloadSource, ModelStatus, NotificationType, Prisma, Role } from '@prisma/client'
 import type { Response } from 'express'
 import { access } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { normalizeTags } from '../common/text'
 import { presentModel, presentUpdate, presentVersion } from '../common/presenters'
 import type { AuthUser } from '../common/types'
+import { NotificationsService } from '../notifications/notifications.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { StorageService } from '../storage/storage.service'
 import { CreateModelDto } from './dto/create-model.dto'
@@ -41,6 +42,19 @@ const modelDetailInclude = {
   category: true,
   tags: { include: { tag: true } },
   versions: { orderBy: { createdAt: 'desc' as const } },
+  postLinks: {
+    where: { post: { isHidden: false } },
+    take: 6,
+    include: {
+      post: {
+        include: {
+          author: { select: authorSelect },
+          category: true,
+          tags: { include: { tag: true } },
+        },
+      },
+    },
+  },
 } satisfies Prisma.ModelPackageInclude
 
 export interface ModelUploadFiles {
@@ -56,6 +70,7 @@ export class ModelsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   listCategories() {
@@ -118,7 +133,7 @@ export class ModelsService {
   }
 
   async listUpdates(limit = 4) {
-    const take = Math.min(Math.max(limit, 1), 10)
+    const take = Math.min(Math.max(limit, 1), 100)
     const versions = await this.prisma.modelVersion.findMany({
       where: { model: { status: ModelStatus.PUBLISHED } },
       orderBy: { createdAt: 'desc' },
@@ -294,7 +309,7 @@ export class ModelsService {
   async updateStatus(id: string, status: ModelStatus) {
     const model = await this.prisma.modelPackage.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, name: true, authorId: true, status: true },
     })
     if (!model) throw new NotFoundException('模型包不存在')
 
@@ -304,7 +319,47 @@ export class ModelsService {
       include: modelInclude,
     })
 
+    if (model.status !== status) {
+      await this.notifyStatusChange(model, status).catch(() => undefined)
+    }
+
     return presentModel(updated)
+  }
+
+  private async notifyStatusChange(
+    model: { id: string; name: string; authorId: string },
+    status: ModelStatus,
+  ) {
+    const messages: Partial<
+      Record<ModelStatus, { type: NotificationType; title: string; content: string }>
+    > = {
+      PUBLISHED: {
+        type: NotificationType.MODEL_APPROVED,
+        title: '模型包审核通过',
+        content: `你的模型包《${model.name}》已通过审核并公开发布。`,
+      },
+      REJECTED: {
+        type: NotificationType.MODEL_REJECTED,
+        title: '模型包审核未通过',
+        content: `你的模型包《${model.name}》未通过审核，请根据社区规范调整后重新提交。`,
+      },
+      DELISTED: {
+        type: NotificationType.MODEL_DELISTED,
+        title: '模型包已下架',
+        content: `你的模型包《${model.name}》已被下架，如有疑问请联系管理员。`,
+      },
+    }
+
+    const message = messages[status]
+    if (!message) return
+
+    await this.notifications.create({
+      userId: model.authorId,
+      type: message.type,
+      title: message.title,
+      content: message.content,
+      link: `/models/${model.id}`,
+    })
   }
 
   async download(

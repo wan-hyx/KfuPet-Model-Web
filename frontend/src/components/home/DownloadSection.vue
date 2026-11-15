@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import AppIcon from '@/components/ui/AppIcon.vue'
 
-const installerUrl = 'https://github.com/KfuPet/KfuPet/releases/latest/download/KfuPetInstall.exe'
 const releasesUrl = 'https://github.com/KfuPet/KfuPet/releases'
 </script>
 
@@ -36,19 +35,14 @@ const releasesUrl = 'https://github.com/KfuPet/KfuPet/releases'
         </div>
 
         <div class="dl-cards">
-          <a
-            class="dl-card"
-            :href="installerUrl"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <RouterLink class="dl-card" to="/download">
             <span class="dl-icon"><AppIcon name="windows" /></span>
             <span>
               <span class="dl-card-title">下载 Windows 版 v0.1.7</span>
-              <span class="dl-card-sub">x64 · 安装包 25.4 MB · Windows 10 及以上</span>
+              <span class="dl-card-sub">x64 · 安装包 25.4 MB · 三个下载源可选</span>
             </span>
             <span class="dl-arrow"><AppIcon name="arrow" /></span>
-          </a>
+          </RouterLink>
 
           <div class="dl-card dl-card-disabled" aria-disabled="true">
             <span class="dl-icon"><AppIcon name="android" /></span>

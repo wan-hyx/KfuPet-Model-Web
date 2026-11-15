@@ -7,6 +7,7 @@ import {
   fetchUserProfile,
   updateMyProfile,
   uploadAvatar,
+  uploadCover,
   type MyProfile,
   type PublicProfile,
 } from '@/api/users'
@@ -32,6 +33,15 @@ const saveError = ref('')
 const avatarFile = ref<File | null>(null)
 const avatarPreview = ref('')
 const avatarInput = ref<HTMLInputElement | null>(null)
+const coverFile = ref<File | null>(null)
+const coverPreview = ref('')
+const coverInput = ref<HTMLInputElement | null>(null)
+const useDefaultCover = ref(false)
+const coverPositionX = ref(50)
+const coverPositionY = ref(50)
+const coverPreviewBox = ref<HTMLElement | null>(null)
+const draggingCover = ref(false)
+let coverDragStart: { x: number; y: number; posX: number; posY: number } | null = null
 
 const form = reactive({
   displayName: '',
@@ -40,6 +50,17 @@ const form = reactive({
 
 const displayName = computed(() => profile.value?.name ?? session.user?.name ?? '')
 const avatarUrl = computed(() => profile.value?.avatarUrl ?? session.user?.avatarUrl ?? null)
+const heroCoverUrl = computed(
+  () => coverPreview.value || profile.value?.coverUrl || '',
+)
+const previewCoverUrl = computed(() => {
+  if (coverPreview.value) return coverPreview.value
+  if (useDefaultCover.value) return ''
+  return profile.value?.coverUrl || ''
+})
+const coverObjectPosition = computed(
+  () => `${coverPositionX.value}% ${coverPositionY.value}%`,
+)
 const isAdminUser = computed(() => profile.value?.role === 'ADMIN')
 const stats = computed(() => publicProfile.value?.stats ?? { posts: 0, models: 0, downloads: 0 })
 const recentPosts = computed(() => publicProfile.value?.posts ?? [])
@@ -54,6 +75,7 @@ async function load() {
   try {
     const me = await fetchMyProfile()
     profile.value = me
+    syncCoverPosition(me.coverPosition)
 
     try {
       publicProfile.value = await fetchUserProfile(me.id)
@@ -72,9 +94,19 @@ function startEdit() {
   form.displayName = profile.value.name
   form.bio = profile.value.bio ?? ''
   avatarFile.value = null
+  coverFile.value = null
+  useDefaultCover.value = false
+  syncCoverPosition(profile.value.coverPosition)
   clearAvatarPreview()
+  clearCoverPreview()
   saveError.value = ''
   editing.value = true
+}
+
+function syncCoverPosition(value: string | null | undefined) {
+  const matched = /^(\d{1,3})% (\d{1,3})%$/.exec(value ?? '')
+  coverPositionX.value = matched ? Math.min(100, Number(matched[1])) : 50
+  coverPositionY.value = matched ? Math.min(100, Number(matched[2])) : 50
 }
 
 function clearAvatarPreview() {
@@ -82,11 +114,19 @@ function clearAvatarPreview() {
   avatarPreview.value = ''
 }
 
+function clearCoverPreview() {
+  if (coverPreview.value) URL.revokeObjectURL(coverPreview.value)
+  coverPreview.value = ''
+}
+
 function cancelEdit() {
   editing.value = false
   saveError.value = ''
   avatarFile.value = null
+  coverFile.value = null
+  useDefaultCover.value = false
   clearAvatarPreview()
+  clearCoverPreview()
 }
 
 function onAvatarChange(event: Event) {
@@ -115,7 +155,84 @@ function onAvatarChange(event: Event) {
   avatarPreview.value = URL.createObjectURL(file)
 }
 
+function onCoverChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+
+  saveError.value = ''
+  coverFile.value = null
+  clearCoverPreview()
+
+  if (!file) return
+
+  if (!/\.(jpe?g|png|webp)$/i.test(file.name)) {
+    saveError.value = '背景仅支持 JPG / PNG / WebP 格式'
+    input.value = ''
+    return
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    saveError.value = '背景图片不能超过 10 MB'
+    input.value = ''
+    return
+  }
+
+  coverFile.value = file
+  coverPreview.value = URL.createObjectURL(file)
+  useDefaultCover.value = false
+  syncCoverPosition('50% 50%')
+}
+
+function resetCover() {
+  coverFile.value = null
+  clearCoverPreview()
+  useDefaultCover.value = true
+  syncCoverPosition('50% 50%')
+  if (coverInput.value) coverInput.value.value = ''
+}
+
+function clampCoverPosition(value: number) {
+  return Math.round(Math.min(100, Math.max(0, value)))
+}
+
+function startCoverDrag(event: PointerEvent) {
+  if (!previewCoverUrl.value) return
+
+  const target = event.currentTarget as HTMLElement
+  target.setPointerCapture(event.pointerId)
+  coverDragStart = {
+    x: event.clientX,
+    y: event.clientY,
+    posX: coverPositionX.value,
+    posY: coverPositionY.value,
+  }
+  draggingCover.value = true
+}
+
+function moveCoverDrag(event: PointerEvent) {
+  if (!coverDragStart || !coverPreviewBox.value) return
+
+  const rect = coverPreviewBox.value.getBoundingClientRect()
+  const deltaX = ((event.clientX - coverDragStart.x) / rect.width) * 100
+  const deltaY = ((event.clientY - coverDragStart.y) / rect.height) * 100
+  coverPositionX.value = clampCoverPosition(coverDragStart.posX - deltaX)
+  coverPositionY.value = clampCoverPosition(coverDragStart.posY - deltaY)
+}
+
+function endCoverDrag(event: PointerEvent) {
+  if (!coverDragStart) return
+
+  coverDragStart = null
+  draggingCover.value = false
+
+  const target = event.currentTarget as HTMLElement
+  if (target.hasPointerCapture(event.pointerId)) {
+    target.releasePointerCapture(event.pointerId)
+  }
+}
+
 onBeforeUnmount(clearAvatarPreview)
+onBeforeUnmount(clearCoverPreview)
 
 async function save() {
   if (!profile.value) return
@@ -146,11 +263,25 @@ async function save() {
       clearAvatarPreview()
     }
 
+    if (coverFile.value) {
+      const withCover = await uploadCover(coverFile.value)
+      profile.value = withCover
+      coverFile.value = null
+      useDefaultCover.value = false
+      clearCoverPreview()
+    }
+
     const updated = await updateMyProfile({
       displayName: name,
       bio,
+      ...(useDefaultCover.value
+        ? { coverUrl: '' }
+        : previewCoverUrl.value
+          ? { coverPosition: coverObjectPosition.value }
+          : {}),
     })
     profile.value = updated
+    syncCoverPosition(updated.coverPosition)
     if (publicProfile.value) {
       publicProfile.value = {
         ...publicProfile.value,
@@ -188,47 +319,70 @@ async function save() {
 
       <template v-else-if="profile">
         <section class="panel profile-hero">
-          <span v-if="avatarUrl" class="avatar avatar-lg avatar-img">
-            <img :src="avatarUrl" :alt="`${displayName} 的头像`" />
-          </span>
-          <span v-else class="avatar avatar-lg" :class="`av-${toneFromId(profile.id)}`">
-            {{ initialOf(displayName) }}
-          </span>
-
-          <div class="hero-main">
-            <div class="name-row">
-              <h1>{{ displayName }}</h1>
-              <span class="role-badge" :class="{ admin: isAdminUser }">
-                {{ isAdminUser ? '管理员' : '社区成员' }}
-              </span>
+          <div class="profile-cover">
+            <img
+              v-if="heroCoverUrl"
+              :src="heroCoverUrl"
+              alt="个人主页背景"
+              class="cover-img"
+              :style="{ objectPosition: coverObjectPosition }"
+            />
+            <div
+              v-else
+              class="cover-fallback"
+              :class="`cover-tone-${toneFromId(profile.id)}`"
+              aria-hidden="true"
+            >
+              <span class="cover-orb cover-orb-a"></span>
+              <span class="cover-orb cover-orb-b"></span>
+              <AppIcon name="paw" class="cover-paw" />
             </div>
-            <p class="username">@{{ profile.username }}</p>
-            <p class="meta-line">
-              <span v-if="profile.email">{{ profile.email }}</span>
-              <span v-if="profile.createdAt">加入于 {{ formatDate(profile.createdAt) }}</span>
-            </p>
-            <p class="bio">{{ profile.bio || '还没有填写个人简介，介绍一下自己吧。' }}</p>
+            <span class="cover-shade"></span>
           </div>
 
-          <div class="hero-actions">
-            <button v-if="!editing" type="button" class="btn btn-outline" @click="startEdit">
-              编辑资料
-            </button>
-            <RouterLink to="/me/models" class="btn btn-ghost">我的模型</RouterLink>
-          </div>
+          <div class="profile-hero-body">
+            <span v-if="avatarUrl" class="avatar avatar-lg avatar-img">
+              <img :src="avatarUrl" :alt="`${displayName} 的头像`" />
+            </span>
+            <span v-else class="avatar avatar-lg" :class="`av-${toneFromId(profile.id)}`">
+              {{ initialOf(displayName) }}
+            </span>
 
-          <div class="stat-row">
-            <div>
-              <strong>{{ formatCount(stats.posts) }}</strong>
-              <span>发布的帖子</span>
+            <div class="hero-main">
+              <div class="name-row">
+                <h1>{{ displayName }}</h1>
+                <span class="role-badge" :class="{ admin: isAdminUser }">
+                  {{ isAdminUser ? '管理员' : '社区成员' }}
+                </span>
+              </div>
+              <p class="username">@{{ profile.username }}</p>
+              <p class="meta-line">
+                <span v-if="profile.email">{{ profile.email }}</span>
+                <span v-if="profile.createdAt">加入于 {{ formatDate(profile.createdAt) }}</span>
+              </p>
+              <p class="bio">{{ profile.bio || '还没有填写个人简介，介绍一下自己吧。' }}</p>
             </div>
-            <div>
-              <strong>{{ formatCount(stats.models) }}</strong>
-              <span>公开模型包</span>
+
+            <div class="hero-actions">
+              <button v-if="!editing" type="button" class="btn btn-outline" @click="startEdit">
+                编辑资料
+              </button>
+              <RouterLink to="/me/models" class="btn btn-ghost">我的模型</RouterLink>
             </div>
-            <div>
-              <strong>{{ formatCount(stats.downloads) }}</strong>
-              <span>模型累计下载</span>
+
+            <div class="stat-row">
+              <div>
+                <strong>{{ formatCount(stats.posts) }}</strong>
+                <span>发布的帖子</span>
+              </div>
+              <div>
+                <strong>{{ formatCount(stats.models) }}</strong>
+                <span>公开模型包</span>
+              </div>
+              <div>
+                <strong>{{ formatCount(stats.downloads) }}</strong>
+                <span>模型累计下载</span>
+              </div>
             </div>
           </div>
         </section>
@@ -287,6 +441,70 @@ async function save() {
                 />
               </div>
               <span class="form-hint">选择图片后点击「保存修改」生效。</span>
+            </div>
+
+            <div class="form-field full">
+              <label>主页背景</label>
+              <div class="cover-upload">
+                <div
+                  v-if="previewCoverUrl"
+                  ref="coverPreviewBox"
+                  class="cover-preview-stage"
+                  :class="{ dragging: draggingCover }"
+                  @pointerdown="startCoverDrag"
+                  @pointermove="moveCoverDrag"
+                  @pointerup="endCoverDrag"
+                  @pointercancel="endCoverDrag"
+                >
+                  <img
+                    :src="previewCoverUrl"
+                    alt="背景预览"
+                    :style="{ objectPosition: coverObjectPosition }"
+                    draggable="false"
+                  />
+                  <span class="cover-drag-hint">拖动图片调整显示位置</span>
+                </div>
+                <span
+                  v-else
+                  class="cover-preview"
+                  :class="`cover-tone-${toneFromId(profile.id)}`"
+                >
+                  <span class="cover-preview-empty">默认背景</span>
+                </span>
+
+                <div class="avatar-actions">
+                  <div class="cover-buttons">
+                    <button
+                      type="button"
+                      class="btn btn-outline avatar-btn"
+                      @click="coverInput?.click()"
+                    >
+                      <AppIcon name="spark" />
+                      选择背景图片
+                    </button>
+                    <button
+                      v-if="previewCoverUrl"
+                      type="button"
+                      class="btn btn-ghost avatar-btn"
+                      @click="resetCover"
+                    >
+                      使用默认背景
+                    </button>
+                  </div>
+                  <span class="form-hint">
+                    {{ coverFile ? coverFile.name : '支持 JPG / PNG / WebP，最大 10 MB，建议 16:9 横图' }}
+                  </span>
+                </div>
+
+                <input
+                  ref="coverInput"
+                  class="avatar-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  @change="onCoverChange"
+                />
+              </div>
+              <span class="form-hint">背景会显示在个人信息页顶部，选择图片后点击「保存修改」生效。</span>
             </div>
 
             <div class="form-field full">
@@ -373,19 +591,109 @@ async function save() {
 }
 
 .profile-hero {
+  padding: 0;
+  overflow: hidden;
+}
+
+.profile-cover {
+  position: relative;
+  height: 240px;
+  overflow: hidden;
+}
+
+.cover-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover-fallback {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.cover-tone-1 {
+  background: linear-gradient(135deg, #ffe4d8 0%, #ffb9a2 55%, #f79a80 100%);
+}
+
+.cover-tone-2 {
+  background: linear-gradient(135deg, #e2ddff 0%, #c5bcf8 55%, #a99cee 100%);
+}
+
+.cover-tone-3 {
+  background: linear-gradient(135deg, #d8f4eb 0%, #b0e7d8 55%, #8bd6c4 100%);
+}
+
+.cover-tone-4 {
+  background: linear-gradient(135deg, #fff0cd 0%, #f9dda1 55%, #eec27f 100%);
+}
+
+.cover-tone-5 {
+  background: linear-gradient(135deg, #dcecff 0%, #b6d8fb 55%, #8fbfef 100%);
+}
+
+.cover-tone-6 {
+  background: linear-gradient(135deg, #ffe0ef 0%, #f7c1db 55%, #ec9fc3 100%);
+}
+
+.cover-orb {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.cover-orb-a {
+  width: 190px;
+  height: 190px;
+  top: -80px;
+  left: 14%;
+}
+
+.cover-orb-b {
+  width: 130px;
+  height: 130px;
+  left: 42%;
+  bottom: -60px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cover-paw {
+  position: absolute;
+  right: 28px;
+  bottom: -18px;
+  width: 150px;
+  height: 150px;
+  color: rgba(255, 255, 255, 0.32);
+  transform: rotate(-12deg);
+}
+
+.cover-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(24, 17, 28, 0) 55%, rgba(24, 17, 28, 0.22) 100%);
+  pointer-events: none;
+}
+
+.profile-hero-body {
+  position: relative;
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 22px;
   align-items: start;
-  padding: 30px;
+  padding: 0 30px 30px;
 }
 
 .avatar-lg {
-  width: 76px;
-  height: 76px;
-  border-radius: 24px;
-  font-size: 26px;
+  width: 88px;
+  height: 88px;
+  margin-top: -46px;
+  border: 4px solid #fff;
+  border-radius: 28px;
+  font-size: 30px;
   font-weight: 750;
+  box-shadow: 0 14px 30px -18px rgba(29, 23, 38, 0.55);
 }
 
 .avatar-img {
@@ -400,6 +708,7 @@ async function save() {
 
 .hero-main {
   min-width: 0;
+  padding-top: 16px;
 }
 
 .name-row {
@@ -458,6 +767,7 @@ async function save() {
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
+  padding-top: 16px;
 }
 
 .hero-actions .btn {
@@ -545,6 +855,76 @@ async function save() {
 
 .avatar-input {
   display: none;
+}
+
+.cover-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+
+.cover-preview-stage,
+.cover-preview {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 15 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.cover-preview-stage {
+  cursor: grab;
+  touch-action: none;
+  background: var(--bg-soft);
+}
+
+.cover-preview-stage.dragging {
+  cursor: grabbing;
+}
+
+.cover-preview-stage img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  pointer-events: none;
+}
+
+.cover-drag-hint {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(20, 16, 25, 0.52);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.cover-preview {
+  display: grid;
+  place-items: center;
+}
+
+.cover-preview-empty {
+  position: relative;
+  z-index: 1;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: rgba(43, 35, 48, 0.55);
+}
+
+.cover-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .edit-panel .form-error.full,
@@ -668,15 +1048,32 @@ async function save() {
 }
 
 @media (max-width: 760px) {
-  .profile-hero {
+  .profile-cover {
+    height: 180px;
+  }
+
+  .profile-hero-body {
     grid-template-columns: auto 1fr;
-    padding: 22px;
+    padding: 0 20px 24px;
+  }
+
+  .avatar-lg {
+    width: 76px;
+    height: 76px;
+    margin-top: -38px;
+    border-radius: 24px;
+    font-size: 26px;
+  }
+
+  .hero-main {
+    padding-top: 12px;
   }
 
   .hero-actions {
     grid-column: 1 / -1;
     flex-direction: row;
     align-items: center;
+    padding-top: 0;
   }
 
   .activity-grid {

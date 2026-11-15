@@ -67,7 +67,7 @@ async function submit() {
       await login(form.username.trim(), form.password)
     }
 
-    await router.push(redirect.value)
+    await router.replace(redirect.value)
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '操作失败，请稍后重试'
   } finally {
@@ -99,6 +99,7 @@ async function submit() {
             class="auth-tab"
             :class="{ active: !isRegister }"
             :query="route.query"
+            replace
           >
             登录
           </RouterLink>
@@ -107,6 +108,7 @@ async function submit() {
             class="auth-tab"
             :class="{ active: isRegister }"
             :query="route.query"
+            replace
           >
             注册
           </RouterLink>
@@ -175,7 +177,9 @@ async function submit() {
 
         <p class="auth-switch">
           {{ isRegister ? '已经有账号了？' : '还没有账号？' }}
-          <RouterLink :to="switchLink">{{ isRegister ? '直接登录' : '免费注册' }}</RouterLink>
+          <RouterLink :to="switchLink" replace>
+            {{ isRegister ? '直接登录' : '免费注册' }}
+          </RouterLink>
         </p>
       </section>
     </div>

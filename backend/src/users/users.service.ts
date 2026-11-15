@@ -9,7 +9,7 @@ import { ListAdminUsersQueryDto } from './dto/list-admin-users-query.dto'
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto'
 import { UpdateProfileDto } from './dto/update-profile.dto'
 
-const AVATAR_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])
 
 @Injectable()
 export class UsersService {
@@ -27,6 +27,8 @@ export class UsersService {
         email: true,
         displayName: true,
         avatarUrl: true,
+        coverUrl: true,
+        coverPosition: true,
         bio: true,
         role: true,
         createdAt: true,
@@ -35,7 +37,12 @@ export class UsersService {
 
     if (!user) throw new NotFoundException('用户不存在')
 
-    return { ...presentUser(user), email: user.email }
+    return {
+      ...presentUser(user),
+      email: user.email,
+      coverUrl: user.coverUrl ?? null,
+      coverPosition: user.coverPosition ?? null,
+    }
   }
 
   async getPublicProfile(id: string) {
@@ -64,20 +71,38 @@ export class UsersService {
       this.prisma.post.findMany({
         where: { authorId: id, isHidden: false },
         orderBy: { createdAt: 'desc' },
-        take: 5,
-        select: { id: true, title: true, createdAt: true },
+        take: 20,
+        select: {
+          id: true,
+          title: true,
+          excerpt: true,
+          views: true,
+          likes: true,
+          commentCount: true,
+          createdAt: true,
+          category: { select: { name: true, slug: true } },
+        },
       }),
       this.prisma.modelPackage.findMany({
         where: { authorId: id, status: ModelStatus.PUBLISHED },
         orderBy: { updatedAt: 'desc' },
-        take: 5,
+        take: 20,
         select: {
           id: true,
           name: true,
+          summary: true,
           coverKey: true,
           coverUrl: true,
           downloadCount: true,
+          favoriteCount: true,
           updatedAt: true,
+          category: { select: { name: true, slug: true } },
+          tags: { select: { tag: { select: { name: true } } } },
+          versions: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { version: true, fileSize: true },
+          },
         },
       }),
     ])
@@ -90,10 +115,16 @@ export class UsersService {
         downloads: downloadSum._sum.downloadCount ?? 0,
       },
       posts,
-      models: models.map((model) => ({
-        ...model,
-        coverUrl: model.coverUrl ?? mediaUrl(model.coverKey),
-      })),
+      models: models.map((model) => {
+        const { versions, ...rest } = model
+        return {
+          ...rest,
+          coverUrl: model.coverUrl ?? mediaUrl(model.coverKey),
+          tags: model.tags.map((item) => item.tag.name),
+          version: versions[0]?.version ?? null,
+          sizeBytes: versions[0]?.fileSize ?? 0,
+        }
+      }),
     }
   }
 
@@ -104,6 +135,8 @@ export class UsersService {
         displayName: dto.displayName?.trim(),
         bio: dto.bio?.trim(),
         avatarUrl: dto.avatarUrl?.trim(),
+        coverUrl: dto.coverUrl === '' ? null : dto.coverUrl?.trim(),
+        coverPosition: dto.coverUrl === '' ? null : dto.coverPosition?.trim(),
       },
     })
 
@@ -113,7 +146,7 @@ export class UsersService {
   async updateAvatar(id: string, file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('请选择头像图片')
 
-    if (!AVATAR_EXTENSIONS.has(extname(file.originalname).toLowerCase())) {
+    if (!IMAGE_EXTENSIONS.has(extname(file.originalname).toLowerCase())) {
       throw new BadRequestException('头像仅支持 JPG / PNG / WebP 格式')
     }
 
@@ -122,6 +155,23 @@ export class UsersService {
     await this.prisma.user.update({
       where: { id },
       data: { avatarUrl: mediaUrl(stored.key) },
+    })
+
+    return this.me(id)
+  }
+
+  async updateCover(id: string, file?: Express.Multer.File) {
+    if (!file) throw new BadRequestException('请选择背景图片')
+
+    if (!IMAGE_EXTENSIONS.has(extname(file.originalname).toLowerCase())) {
+      throw new BadRequestException('背景仅支持 JPG / PNG / WebP 格式')
+    }
+
+    const stored = await this.storage.put(file.buffer, 'images/covers', file.originalname)
+
+    await this.prisma.user.update({
+      where: { id },
+      data: { coverUrl: mediaUrl(stored.key), coverPosition: '50% 50%' },
     })
 
     return this.me(id)

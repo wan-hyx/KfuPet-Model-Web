@@ -7,14 +7,6 @@ defineProps<{ updates: ModelUpdate[]; notices: Notice[] }>()
 
 const notify = useFeatureNotice()
 
-function openUpdates() {
-  notify('更新日志列表页将在下一阶段接入。')
-}
-
-function openNotice(title: string) {
-  notify(`公告《${title}》详情页将在下一阶段接入。`)
-}
-
 function openMirrorGuide() {
   notify('镜像节点接入文档将在分发第二阶段发布。')
 }
@@ -26,25 +18,31 @@ function openMirrorGuide() {
       <div class="panel-card">
         <div class="panel-head">
           <h2>最近更新的模型包</h2>
-          <button type="button" class="text-link" @click="openUpdates">
+          <RouterLink to="/updates" class="text-link">
             查看全部
             <AppIcon name="arrow" />
-          </button>
+          </RouterLink>
         </div>
 
         <ul class="update-list">
           <li v-for="update in updates" :key="update.id">
-            <span class="up-cover">
-              <img class="up-art" :src="update.cover" alt="" loading="lazy" />
-            </span>
-            <div>
-              <div class="up-title">
-                {{ update.name }}
-                <span class="ver">{{ update.version }}</span>
+            <component
+              :is="update.modelId ? 'RouterLink' : 'div'"
+              :to="update.modelId ? `/models/${update.modelId}` : undefined"
+              class="update-link"
+            >
+              <span class="up-cover">
+                <img class="up-art" :src="update.cover" alt="" loading="lazy" />
+              </span>
+              <div>
+                <div class="up-title">
+                  {{ update.name }}
+                  <span class="ver">{{ update.version }}</span>
+                </div>
+                <p class="up-desc">{{ update.note }}</p>
               </div>
-              <p class="up-desc">{{ update.note }}</p>
-            </div>
-            <span class="up-time">{{ update.timeLabel }}</span>
+              <span class="up-time">{{ update.timeLabel }}</span>
+            </component>
           </li>
         </ul>
       </div>
@@ -58,9 +56,9 @@ function openMirrorGuide() {
           <li v-for="notice in notices" :key="notice.id">
             <span v-if="notice.pinned" class="notice-tag">置顶</span>
             <span v-else class="notice-dot" aria-hidden="true" />
-            <button type="button" class="notice-link" @click="openNotice(notice.title)">
+            <RouterLink class="notice-link" :to="`/notices/${notice.id}`">
               {{ notice.title }}
-            </button>
+            </RouterLink>
             <time>{{ notice.date }}</time>
           </li>
         </ul>
@@ -113,11 +111,6 @@ function openMirrorGuide() {
 }
 
 .update-list li {
-  display: grid;
-  grid-template-columns: 52px 1fr auto;
-  gap: 14px;
-  align-items: center;
-  padding: 15px 0;
   border-top: 1px solid var(--line);
 }
 
@@ -125,8 +118,21 @@ function openMirrorGuide() {
   border-top: 0;
 }
 
-.update-list li:last-child {
+.update-link {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 15px 0;
+  color: inherit;
+}
+
+.update-list li:last-child .update-link {
   padding-bottom: 0;
+}
+
+.update-link:hover .up-title {
+  color: var(--accent-deep);
 }
 
 .up-cover {
@@ -203,6 +209,7 @@ function openMirrorGuide() {
 }
 
 .notice-link {
+  display: inline-block;
   padding: 0;
   border: 0;
   background: none;

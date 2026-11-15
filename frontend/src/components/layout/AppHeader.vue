@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { NPopover } from 'naive-ui'
 import { useRoute, useRouter } from 'vue-router'
 import BrandLogo from '@/components/ui/BrandLogo.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import { fetchUnreadCount } from '@/api/notifications'
 import { initialOf, toneFromId } from '@/utils/format'
-import { isAdmin, logout, session } from '@/stores/session'
+import { isAdmin, isLoggedIn, logout, session } from '@/stores/session'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,11 +16,12 @@ const navItems = [
   { id: 'community', label: '社区', to: '/community' },
   { id: 'models', label: '模型包', to: '/models' },
   { id: 'updates', label: '更新', to: '/#updates' },
-  { id: 'download', label: '客户端', to: '/#download' },
+  { id: 'download', label: '客户端', to: '/download' },
 ]
 
 const activeSection = ref('top')
 const showUserMenu = ref(false)
+const unreadCount = ref(0)
 let observer: IntersectionObserver | undefined
 
 const isHome = computed(() => route.path === '/')
@@ -28,6 +30,7 @@ const displayName = computed(() => session.user?.name ?? '')
 function isNavActive(id: string) {
   if (id === 'community') return route.path.startsWith('/community')
   if (id === 'models') return route.path.startsWith('/models')
+  if (id === 'download') return route.path.startsWith('/download')
   if (!isHome.value) return false
   if (id === 'top') return activeSection.value === 'top'
   return activeSection.value === id
@@ -67,11 +70,30 @@ watch(
   () => {
     showUserMenu.value = false
     void observeSections()
+    void refreshUnread()
   },
   { immediate: true },
 )
 
+watch(isLoggedIn, () => void refreshUnread())
+
+onMounted(() => void refreshUnread())
+
 onBeforeUnmount(() => observer?.disconnect())
+
+async function refreshUnread() {
+  if (!isLoggedIn.value) {
+    unreadCount.value = 0
+    return
+  }
+
+  try {
+    const result = await fetchUnreadCount()
+    unreadCount.value = result.count
+  } catch {
+    unreadCount.value = 0
+  }
+}
 
 async function onLogout() {
   showUserMenu.value = false
@@ -97,6 +119,10 @@ async function onLogout() {
       </nav>
 
       <div class="nav-actions">
+        <RouterLink to="/search" class="icon-btn" aria-label="搜索站内内容">
+          <AppIcon name="search" />
+        </RouterLink>
+
         <template v-if="session.user">
           <NPopover v-model:show="showUserMenu" trigger="click" placement="bottom-end" :width="190">
             <template #trigger>
@@ -124,6 +150,19 @@ async function onLogout() {
               <RouterLink class="menu-item" to="/me/models" @click="showUserMenu = false">
                 我的模型
               </RouterLink>
+              <RouterLink class="menu-item" to="/me/favorites" @click="showUserMenu = false">
+                我的收藏
+              </RouterLink>
+              <RouterLink
+                class="menu-item"
+                to="/me/notifications"
+                @click="showUserMenu = false"
+              >
+                <span>通知</span>
+                <span v-if="unreadCount" class="menu-badge">
+                  {{ unreadCount > 99 ? '99+' : unreadCount }}
+                </span>
+              </RouterLink>
               <RouterLink
                 v-if="isAdmin"
                 class="menu-item admin"
@@ -142,7 +181,7 @@ async function onLogout() {
           <RouterLink to="/register" class="btn btn-outline register-btn">注册</RouterLink>
         </template>
 
-        <RouterLink to="/#download" class="btn btn-primary download-btn">
+        <RouterLink to="/download" class="btn btn-primary download-btn">
           <AppIcon name="download" />
           <span class="download-text">下载客户端</span>
         </RouterLink>
@@ -252,7 +291,10 @@ async function onLogout() {
 }
 
 .menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
   padding: 8px 10px;
   border: 0;
@@ -265,6 +307,38 @@ async function onLogout() {
   transition:
     background 0.15s,
     color 0.15s;
+}
+
+.menu-badge {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink-soft);
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.icon-btn:hover {
+  border-color: #e6cdbd;
+  color: var(--accent-deep);
 }
 
 .menu-item:hover {

@@ -5,6 +5,7 @@ import { RouterView } from 'vue-router'
 import AnnouncementBar from '@/components/layout/AnnouncementBar.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
+import BackLink from '@/components/layout/BackLink.vue'
 import IconSprite from '@/components/ui/IconSprite.vue'
 import { ensureSession } from '@/stores/session'
 
@@ -30,7 +31,10 @@ void ensureSession()
       <AnnouncementBar />
       <AppHeader />
       <main>
-        <RouterView />
+        <BackLink />
+        <RouterView v-slot="{ Component, route }">
+          <component :is="Component" :key="route.fullPath" />
+        </RouterView>
       </main>
       <AppFooter />
     </NMessageProvider>

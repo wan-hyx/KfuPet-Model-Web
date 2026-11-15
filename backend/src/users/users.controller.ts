@@ -46,6 +46,20 @@ export class UsersController {
     return this.usersService.updateAvatar(user.id, file)
   }
 
+  @Post('me/cover')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileInterceptor('cover', {
+      limits: { files: 1, fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  uploadCover(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.usersService.updateCover(user.id, file)
+  }
+
   @Get(':id')
   profile(@Param('id') id: string) {
     return this.usersService.getPublicProfile(id)

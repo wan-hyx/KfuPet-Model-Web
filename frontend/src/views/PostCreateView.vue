@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { createPost, listPostCategories, type ApiCategory } from '@/api/community'
+import { listModels, type ApiModel } from '@/api/models'
 
 const router = useRouter()
 const message = useMessage()
@@ -11,6 +12,12 @@ const message = useMessage()
 const categories = ref<ApiCategory[]>([])
 const loading = ref(false)
 const error = ref('')
+
+const modelKeyword = ref('')
+const modelResults = ref<ApiModel[]>([])
+const searchingModels = ref(false)
+const selectedModels = ref<ApiModel[]>([])
+let searchTimer: number | undefined
 
 const form = reactive({
   title: '',
@@ -30,6 +37,51 @@ onMounted(async () => {
     categories.value = []
   }
 })
+
+onBeforeUnmount(() => window.clearTimeout(searchTimer))
+
+function onModelInput() {
+  window.clearTimeout(searchTimer)
+  const keyword = modelKeyword.value.trim()
+
+  if (!keyword) {
+    modelResults.value = []
+    searchingModels.value = false
+    return
+  }
+
+  searchingModels.value = true
+  searchTimer = window.setTimeout(() => void searchModels(keyword), 300)
+}
+
+async function searchModels(keyword: string) {
+  try {
+    const result = await listModels({ q: keyword, pageSize: 6 })
+    if (modelKeyword.value.trim() === keyword) {
+      modelResults.value = result.items
+    }
+  } catch {
+    modelResults.value = []
+  } finally {
+    searchingModels.value = false
+  }
+}
+
+function addModel(model: ApiModel) {
+  if (selectedModels.value.length >= 3) {
+    message.warning('最多关联 3 个模型包')
+    return
+  }
+  if (selectedModels.value.some((item) => item.id === model.id)) return
+
+  selectedModels.value.push(model)
+  modelKeyword.value = ''
+  modelResults.value = []
+}
+
+function removeModel(id: string) {
+  selectedModels.value = selectedModels.value.filter((model) => model.id !== id)
+}
 
 function validate(): string {
   if (form.title.trim().length < 3) return '标题至少需要 3 个字符'
@@ -58,6 +110,7 @@ async function submit() {
       excerpt: form.excerpt.trim() || undefined,
       categorySlug: form.categorySlug,
       tags: splitTags(),
+      relatedModelIds: selectedModels.value.map((model) => model.id),
     })
     message.success('帖子已发布')
     await router.push(`/community/posts/${post.id}`)
@@ -139,6 +192,53 @@ async function submit() {
         </div>
 
         <div class="form-field full">
+          <label for="post-models">
+            关联模型包 <span class="optional">（可选，最多 3 个）</span>
+          </label>
+          <div class="model-picker">
+            <input
+              id="post-models"
+              v-model="modelKeyword"
+              class="form-control"
+              type="text"
+              placeholder="搜索模型包名称，选中后会展示在帖子中"
+              autocomplete="off"
+              @input="onModelInput"
+            />
+            <div v-if="searchingModels" class="picker-status">搜索中…</div>
+            <div v-else-if="modelResults.length" class="picker-results">
+              <button
+                v-for="model in modelResults"
+                :key="model.id"
+                type="button"
+                class="picker-item"
+                :disabled="selectedModels.some((item) => item.id === model.id)"
+                @mousedown.prevent="addModel(model)"
+              >
+                <span class="picker-cover">
+                  <img v-if="model.coverUrl" :src="model.coverUrl" :alt="`${model.name} 封面`" />
+                  <AppIcon v-else name="paw" />
+                </span>
+                <span class="picker-info">
+                  <strong>{{ model.name }}</strong>
+                  <em>{{ model.author.name }} · {{ model.version ?? 'v1.0.0' }}</em>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="selectedModels.length" class="selected-models">
+            <span v-for="model in selectedModels" :key="model.id" class="selected-chip">
+              {{ model.name }}
+              <button type="button" aria-label="移除关联模型" @click="removeModel(model.id)">
+                ×
+              </button>
+            </span>
+          </div>
+          <span class="form-hint">帖子会展示这些模型包入口，模型详情页也会出现「相关讨论」。</span>
+        </div>
+
+        <div class="form-field full">
           <label for="post-content">正文</label>
           <textarea
             id="post-content"
@@ -183,6 +283,126 @@ async function submit() {
 
 .inline-link:hover {
   text-decoration: underline;
+}
+
+.model-picker {
+  position: relative;
+}
+
+.picker-status {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.picker-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  text-align: left;
+}
+
+.picker-item:hover:not(:disabled) {
+  background: var(--bg-soft);
+}
+
+.picker-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.picker-cover {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--bg-soft);
+  color: var(--muted);
+}
+
+.picker-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.picker-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.picker-info strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.picker-info em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.selected-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.selected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 11px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.selected-chip button {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(238, 79, 43, 0.14);
+  color: var(--accent-deep);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.selected-chip button:hover {
+  background: rgba(238, 79, 43, 0.26);
 }
 
 .form-error.full {

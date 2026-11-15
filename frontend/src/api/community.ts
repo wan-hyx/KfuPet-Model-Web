@@ -21,6 +21,7 @@ export interface ApiPostSummary {
   excerpt: string
   views: number
   likes: number
+  favorites: number
   comments: number
   pinned: boolean
   featured: boolean
@@ -30,9 +31,21 @@ export interface ApiPostSummary {
   tags: string[]
 }
 
+export interface ApiRelatedModel {
+  id: string
+  name: string
+  summary: string
+  coverUrl: string | null
+  downloadCount: number
+  version: string | null
+  category: ApiCategory
+}
+
 export interface ApiPostDetail extends ApiPostSummary {
   content: string
   liked?: boolean
+  favorited?: boolean
+  relatedModels?: ApiRelatedModel[]
 }
 
 export interface ApiComment {
@@ -85,6 +98,7 @@ export function createPost(payload: {
   excerpt?: string
   categorySlug: string
   tags?: string[]
+  relatedModelIds?: string[]
 }) {
   return apiFetch<ApiPostDetail>('/api/community/posts', {
     method: 'POST',

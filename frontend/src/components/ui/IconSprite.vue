@@ -58,6 +58,31 @@
         stroke-linejoin="round"
       />
     </symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24">
+      <path
+        d="M6.2 3.8h11.6v16.4L12 16.2l-5.8 4V3.8Z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linejoin="round"
+      />
+    </symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24">
+      <path
+        d="M18 9.6a6 6 0 1 0-12 0c0 4.3-1.6 5.7-1.6 5.7h15.2S18 13.9 18 9.6Z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M9.6 18.6a2.6 2.6 0 0 0 4.8 0"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+      />
+    </symbol>
     <symbol id="i-comment" viewBox="0 0 24 24">
       <path
         d="M20.8 11.6a8.2 8.2 0 0 1-8.2 8.2H7.4L3.2 21.8l1.3-4.4A8.2 8.2 0 1 1 20.8 11.6Z"

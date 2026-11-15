@@ -48,6 +48,7 @@ export interface ModelPackage {
 
 export interface ModelUpdate {
   id: string | number
+  modelId: string
   name: string
   version: string
   cover: string
@@ -281,6 +282,7 @@ export const modelPackages: ModelPackage[] = [
 export const modelUpdates: ModelUpdate[] = [
   {
     id: 1,
+    modelId: '',
     name: '雪团 · 猫娘',
     version: 'v1.2.0',
     cover: coverSnow,
@@ -289,6 +291,7 @@ export const modelUpdates: ModelUpdate[] = [
   },
   {
     id: 2,
+    modelId: '',
     name: 'NEO-07 机械猫',
     version: 'v1.0.3',
     cover: coverNeo,
@@ -297,6 +300,7 @@ export const modelUpdates: ModelUpdate[] = [
   },
   {
     id: 3,
+    modelId: '',
     name: '豆柴小次郎',
     version: 'v2.0.1',
     cover: coverShiba,
@@ -305,6 +309,7 @@ export const modelUpdates: ModelUpdate[] = [
   },
   {
     id: 4,
+    modelId: '',
     name: '青鳞 · 龙娘',
     version: 'v0.9.5',
     cover: coverDragon,

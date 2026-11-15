@@ -4,9 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { ModelStatus, Prisma, ReportStatus, ReportTargetType } from '@prisma/client'
+import { ModelStatus, NotificationType, Prisma, ReportStatus, ReportTargetType } from '@prisma/client'
 import { presentUser } from '../common/presenters'
 import type { AuthUser } from '../common/types'
+import { NotificationsService } from '../notifications/notifications.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateReportDto } from './dto/create-report.dto'
 import { ListAdminReportsQueryDto } from './dto/list-admin-reports-query.dto'
@@ -25,7 +26,10 @@ const reporterSelect = {
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async create(dto: CreateReportDto, user: AuthUser) {
     if (dto.targetType === ReportTargetType.POST) {
@@ -224,7 +228,29 @@ export class ReportsService {
         },
       })
 
+      if (action === 'MODEL_DELISTED') {
+        await this.notifyModelDelisted(report.targetId)
+      }
+
       return { ...updated, action }
     })
+  }
+
+  private async notifyModelDelisted(modelId: string) {
+    const model = await this.prisma.modelPackage.findUnique({
+      where: { id: modelId },
+      select: { id: true, name: true, authorId: true },
+    })
+    if (!model) return
+
+    await this.notifications
+      .create({
+        userId: model.authorId,
+        type: NotificationType.MODEL_DELISTED,
+        title: '模型包已下架',
+        content: `你的模型包《${model.name}》因违规举报被下架，如有疑问请联系管理员。`,
+        link: `/models/${model.id}`,
+      })
+      .catch(() => undefined)
   }
 }

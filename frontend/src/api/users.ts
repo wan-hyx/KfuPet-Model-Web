@@ -6,6 +6,8 @@ export interface MyProfile {
   name: string
   email: string | null
   avatarUrl: string | null
+  coverUrl: string | null
+  coverPosition: string | null
   bio: string | null
   role: string
   createdAt: string | null
@@ -14,15 +16,26 @@ export interface MyProfile {
 export interface ProfilePost {
   id: string
   title: string
+  excerpt: string
+  views: number
+  likes: number
+  commentCount: number
   createdAt: string
+  category: { name: string; slug: string }
 }
 
 export interface ProfileModel {
   id: string
   name: string
+  summary: string
   coverUrl: string | null
   downloadCount: number
+  favoriteCount: number
   updatedAt: string
+  category: { name: string; slug: string }
+  tags: string[]
+  version: string | null
+  sizeBytes: number
 }
 
 export interface PublicProfile {
@@ -49,6 +62,8 @@ export function fetchMyProfile() {
 export function updateMyProfile(payload: {
   displayName?: string
   avatarUrl?: string
+  coverUrl?: string
+  coverPosition?: string
   bio?: string
 }) {
   return apiFetch<MyProfile>('/api/users/me', {
@@ -62,6 +77,16 @@ export function uploadAvatar(file: File) {
   form.append('avatar', file)
 
   return apiFetch<MyProfile>('/api/users/me/avatar', {
+    method: 'POST',
+    form,
+  })
+}
+
+export function uploadCover(file: File) {
+  const form = new FormData()
+  form.append('cover', file)
+
+  return apiFetch<MyProfile>('/api/users/me/cover', {
     method: 'POST',
     form,
   })

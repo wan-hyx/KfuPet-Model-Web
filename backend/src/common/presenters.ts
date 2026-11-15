@@ -15,6 +15,7 @@ export interface PostLike {
   excerpt: string | null
   views: number
   likes: number
+  favoriteCount?: number
   commentCount: number
   createdAt: Date
   isPinned?: boolean
@@ -23,6 +24,7 @@ export interface PostLike {
   author: UserLike
   category: { id: string; name: string; slug: string }
   tags: Array<{ tag: { name: string } }>
+  relatedModels?: Array<{ model: ModelLike }>
 }
 
 export interface VersionLike {
@@ -53,6 +55,7 @@ export interface ModelLike {
   category: { id: string; name: string; slug: string }
   tags: Array<{ tag: { name: string } }>
   versions: VersionLike[]
+  postLinks?: Array<{ post: PostLike }>
 }
 
 export function presentUser(user: UserLike) {
@@ -74,6 +77,7 @@ export function presentPost(post: PostLike) {
     excerpt: post.excerpt ?? '',
     views: post.views,
     likes: post.likes,
+    favorites: post.favoriteCount ?? 0,
     comments: post.commentCount,
     pinned: post.isPinned ?? false,
     featured: post.isFeatured ?? false,
@@ -93,6 +97,19 @@ export function presentPostDetail(post: PostLike) {
   return {
     ...presentPost(post),
     content: post.content,
+    relatedModels: (post.relatedModels ?? []).map(({ model }) => ({
+      id: model.id,
+      name: model.name,
+      summary: model.summary,
+      coverUrl: model.coverUrl ?? mediaUrl(model.coverKey),
+      downloadCount: model.downloadCount,
+      version: model.versions[0]?.version ?? null,
+      category: {
+        id: model.category.id,
+        name: model.category.name,
+        slug: model.category.slug,
+      },
+    })),
   }
 }
 
@@ -139,6 +156,13 @@ export function presentModel(model: ModelLike) {
           createdAt: latest.createdAt,
         }
       : null,
+    relatedPosts: (model.postLinks ?? []).map(({ post }) => ({
+      id: post.id,
+      title: post.title,
+      comments: post.commentCount,
+      publishedAt: post.createdAt,
+      author: presentUser(post.author),
+    })),
   }
 }
 

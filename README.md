@@ -94,6 +94,8 @@ docker compose ps
 ### 页面导航
 
 - **顶部导航**：首页 / 社区 / 模型包 / 更新 / 客户端；窄屏会自动收起导航，可通过页脚链接进入相应页面。
+- **客户端下载**（`/download`）：提供 GitHub 官方、GitCode 镜像、Gitee 镜像三个下载源，任选其一获取 Windows 安装包。
+- **更新与公告**：首页「最近更新的模型包 → 查看全部」进入更新日志页（`/updates`）；点击「站点公告」条目进入公告详情（`/notices/:id`），可查看正文与其他公告。
 - **右上角（未登录）**：登录、注册、下载客户端。
 - **右上角（已登录）**：点击头像打开菜单 —— 个人信息、发布帖子、上传模型包、我的模型、管理后台（仅管理员可见）、退出登录。
 - **页脚**：发帖规范、审核规则与相关文档入口。
@@ -234,6 +236,8 @@ Vite 开发服务器监听 `0.0.0.0`，同一 Wi-Fi 下的手机、平板可直�
 | --- | --- | --- |
 | `GET` | `/api/health` | 健康检查（含数据库连通性） |
 | `GET` | `/api/home` | 首页聚合：统计、帖子、模型包、更新、公告 |
+| `GET` | `/api/notices` | 站点公告列表（含正文） |
+| `GET` | `/api/notices/:id` | 站点公告详情 |
 | `POST` | `/api/auth/register` | 注册 |
 | `POST` | `/api/auth/login` | 登录，返回 JWT |
 | `GET` | `/api/auth/me` | 当前登录用户 |
@@ -249,6 +253,7 @@ Vite 开发服务器监听 `0.0.0.0`，同一 Wi-Fi 下的手机、平板可直�
 | `GET` / `POST` | `/api/community/posts/:id/comments` | 评论列表 / 发表评论 |
 | `DELETE` | `/api/community/comments/:id` | 删除自己的评论 |
 | `GET` | `/api/models` | 模型包列表（`sort=latest\|hot\|updated`、`q`、`category`） |
+| `GET` | `/api/models/updates` | 模型包版本更新日志（`limit`，最多 100 条） |
 | `GET` | `/api/models/mine` | 我提交的模型包（含待审核，需登录） |
 | `GET` | `/api/models/:id` | 模型包详情 |
 | `GET` | `/api/models/:id/versions` | 版本列表 |

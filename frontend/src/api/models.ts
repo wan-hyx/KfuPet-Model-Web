@@ -16,6 +16,14 @@ export interface ApiModelVersion {
   createdAt: string
 }
 
+export interface ApiRelatedPost {
+  id: string
+  title: string
+  comments: number
+  publishedAt: string
+  author: ApiAuthor
+}
+
 export interface ApiModel {
   id: string
   name: string
@@ -34,6 +42,17 @@ export interface ApiModel {
   versionId: string | null
   sizeBytes: number
   latestVersion: ApiModelVersion | null
+  relatedPosts?: ApiRelatedPost[]
+}
+
+export interface ApiModelUpdate {
+  id: string
+  modelId: string
+  name: string
+  version: string
+  coverUrl: string | null
+  note: string
+  createdAt: string
 }
 
 export interface ModelListParams {
@@ -90,6 +109,10 @@ export function listMyModels() {
 
 export function listModelVersions(id: string) {
   return apiFetch<ApiModelVersion[]>(`/api/models/${id}/versions`)
+}
+
+export function listModelUpdates(limit = 20) {
+  return apiFetch<ApiModelUpdate[]>(`/api/models/updates?limit=${limit}`)
 }
 
 export function downloadUrl(modelId: string, versionId: string) {
